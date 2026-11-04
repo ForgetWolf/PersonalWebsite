@@ -1,0 +1,58 @@
+*.exe
+*.log
+.tools/
+timing-baseline/*.mp4
+timing-baseline/*.png
+
+# Local agent notes and unpublished drafts
+[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
+backupnote.md
+draft/
+
+# Credentials and machine-specific configuration
+.env
+.env.*
+!.env.example
+!.env.sample
+secrets/
+credentials/
+*.pem
+*.key
+*.p12
+*.pfx
+.ssh/
+.aws/
+.dev.vars
+.dev.vars.*
+.wrangler/
+.vscode/
+.idea/
+
+# Build output and Python caches
+dist/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+server-next.exe
+
+# Historical backups and local visual verification artifacts
+*.bak
+20261104bakup/
+timing-baseline/
+timing-before-fades/
+lettering/before-*/
+*-proof.png
+*-proof.gif
+*-preview.png
+random/layout-*.png
+Thumbs.db
+.DS_Store
+
+# Local review images and superseded lettering
+random/RESTORE.md
+random/*.png
+carousel/preview.png
+lettering/*.png
+lettering/previous-dpsk/
+lettering/ni-before-joins.svg

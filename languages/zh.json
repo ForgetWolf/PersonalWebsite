@@ -1,0 +1,13 @@
+{
+  "language": "zh-CN",
+  "text": "你好，我是ForgetWolf",
+  "total_seconds": 9.36328427836,
+  "initial_wait": 0.4,
+  "ni_seconds": 2.4,
+  "comma_seconds": 0.25,
+  "wo_seconds": 2.95,
+  "section_gap": 0.05,
+  "fade_in": 0.3,
+  "hold": 0.5,
+  "fade_out": 0.4
+}

@@ -1,0 +1,2 @@
+fonttools==4.68.0
+Markdown==3.11.2

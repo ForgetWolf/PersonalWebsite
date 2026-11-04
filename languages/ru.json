@@ -1,0 +1,11 @@
+{
+  "language": "ru",
+  "text": "Здравствуйте, здесь ФоргетВолк.",
+  "font_file": "GOST-font.coffee",
+  "total_seconds": 9.36328427836,
+  "initial_wait": 0.4,
+  "fade_in": 0.3,
+  "hold": 0.5,
+  "fade_out": 0.4,
+  "pen_lift": 0.025
+}
