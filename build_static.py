@@ -1,12 +1,26 @@
 """Build deployable HTML/SVG files. No CGI executables are invoked."""
 from pathlib import Path
 import argparse
+import os
 import re
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / 'dist'
+
+
+def site_base():
+    """URL prefix for root-relative links: '/' locally, '/Repo/' on project Pages."""
+    base = os.environ.get('SITE_BASE', '/').strip()
+    if not base.startswith('/'):
+        base = '/' + base
+    if not base.endswith('/'):
+        base += '/'
+    return base
+
+
+BASE = site_base()
 
 def document(svg, lang='en', title='ForgetWolf'):
     return f'''<!doctype html>
@@ -22,6 +36,9 @@ def write(route, text):
     target.parent.mkdir(parents=True, exist_ok=True)
     # Same-origin navigation works on both local preview and the final domain.
     text = text.replace('https://forgetwolf.net/', '/')
+    if BASE != '/':
+        text = text.replace('href="/', 'href="' + BASE)
+        text = text.replace('url=/', 'url=' + BASE)
     target.write_text(text, encoding='utf-8')
 
 def main():

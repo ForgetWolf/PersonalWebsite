@@ -1,11 +1,17 @@
 """Offline checks for the deployable static tree; no HTTP/browser required."""
 from pathlib import Path
 from html.parser import HTMLParser
+import os
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / 'dist'
 S = '{http://www.w3.org/2000/svg}'
+BASE = os.environ.get('SITE_BASE', '/').strip()
+if not BASE.startswith('/'):
+    BASE = '/' + BASE
+if not BASE.endswith('/'):
+    BASE += '/'
 
 class CheckHTML(HTMLParser):
     def handle_starttag(self, tag, attrs):
@@ -13,7 +19,8 @@ class CheckHTML(HTMLParser):
         for key, value in attrs:
             assert key != 'style' and not key.startswith('on'), (key, value)
             if key == 'href' and value.startswith('/'):
-                path = DIST / value.lstrip('/')
+                rel = value[len(BASE):] if value.startswith(BASE) else value[1:]
+                path = DIST / rel
                 assert path.is_file() or (path / 'index.html').is_file(), value
 
 for path in DIST.rglob('*.html'):
