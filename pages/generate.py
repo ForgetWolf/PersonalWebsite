@@ -124,7 +124,9 @@ for name in ("about","friends","contact"):
 </div>
 </body></html>
 '''
-    (ROOT/"pages"/name/"index.html").write_text(html,encoding="utf-8")
+    output = ROOT / "pages" / name / "index.html"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(html, encoding="utf-8")
     links = list(root.iter(S+"a"))
     assert [a.get('aria-label') for a in links] == ['Main' if label.lower()==name else label for label in ('About','Blog','Friends','Contact')]
     assert next(a for a in links if a.get('aria-label')=='Main').get('href')=='https://forgetwolf.net/'
