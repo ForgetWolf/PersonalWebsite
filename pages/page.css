@@ -1,0 +1,109 @@
+@font-face {
+    font-family: "DIN 1451";
+    src: url("fonts/din1451alt.ttf") format("truetype");
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Noto Serif SC";
+    src: url("fonts/NotoSerifSC-Regular.woff2") format("woff2"),
+         url("fonts/NotoSerifSC-Regular.woff") format("woff");
+    font-weight: 400;
+    font-display: swap;
+    unicode-range: U+2E80-2FFF, U+3000-303F, U+3400-9FFF, U+F900-FAFF, U+FF00-FFEF, U+20000-323AF;
+}
+
+body {
+    margin: 0;
+    background: Canvas;
+    color: CanvasText;
+}
+
+.page-title > svg,
+.page-navigation > svg {
+    display: block;
+}
+
+.page-navigation {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin-top: -100px;
+    pointer-events: none;
+}
+
+.page-navigation #nav-strip a {
+    pointer-events: auto;
+}
+
+.page-copy {
+    margin: 0 10% 0 5%;
+    padding-block-end: 3rem;
+    font-family: "DIN 1451", "Noto Serif SC", serif;
+    font-size: clamp(1.25rem, 3.5vw, 1.5rem);
+    font-weight: 400;
+    line-height: 1.65;
+    letter-spacing: 0.025em;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px), (pointer: coarse) {
+    .page-title {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: Canvas;
+    }
+
+    .page-navigation #info-layer > g {
+        /* Scale the 400px strip to 300px and center it below the title. */
+        transform: translate(calc(-21.25vw - 150px), 52px) scale(0.75);
+    }
+
+    .page-copy {
+        margin-left: 5%;
+        margin-right: 5%;
+    }
+}
+
+.page-summary {
+    margin-block-end: 1.5em;
+}
+
+.page-copy p {
+    margin-block: 0 0.85em;
+}
+
+.page-date {
+    font-size: 0.8em;
+    opacity: 0.8;
+}
+
+.friend-entry {
+    margin-block-end: 1.25em;
+}
+
+.friend-mark {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    margin-block-end: 0.25rem;
+    place-items: center;
+}
+
+.friend-icon,
+.friend-initial {
+    display: block;
+    width: 2rem;
+    height: 2rem;
+}
+
+.friend-initial {
+    border: 1px solid currentColor;
+    border-radius: 0.25rem;
+    box-sizing: border-box;
+    font-size: 1.25rem;
+    line-height: calc(2rem - 2px);
+    text-align: center;
+}

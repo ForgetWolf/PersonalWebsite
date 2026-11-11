@@ -1,0 +1,20 @@
+.tools/
+__pycache__/
+*.pyc
+*.exe
+*.log
+dist/
+AGENTS.md
+
+# Local project metadata and credentials
+/README.md
+/LICENSE
+.env
+.env.*
+!.env.example
+
+# Generated pages and animation previews
+/pages/*/index.html
+/random/*.svg
+/mobile/*.svg
+/carousel/carousel.svg
