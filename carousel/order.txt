@@ -1,4 +1,0 @@
-# One language per line. Rearrange these lines to change the playback order.
-en
-ru
-zh

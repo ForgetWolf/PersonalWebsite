@@ -21,18 +21,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements-build.txt
-
       - name: Install build dependencies
-        run: python -m pip install -r requirements-build.txt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-dev ninja-build
 
       - name: Build static site
-        run: python build.py
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target package
 
       - name: Configure Pages
         uses: actions/configure-pages@v6

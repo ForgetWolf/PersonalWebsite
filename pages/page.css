@@ -14,6 +14,15 @@
     unicode-range: U+2E80-2FFF, U+3000-303F, U+3400-9FFF, U+F900-FAFF, U+FF00-FFEF, U+20000-323AF;
 }
 
+@font-face {
+    font-family: "GOST Lettering";
+    src: url("fonts/GOSTLettering-Regular.woff2") format("woff2"),
+         url("fonts/GOSTLettering-Regular.woff") format("woff");
+    font-weight: 400;
+    font-display: swap;
+    unicode-range: U+0401, U+0410-044F, U+0451;
+}
+
 body {
     margin: 0;
     background: Canvas;
@@ -52,12 +61,32 @@ body {
     overflow-wrap: anywhere;
 }
 
+.about-copy {
+    font-family: "GOST Lettering", "DIN 1451", "Noto Serif SC", serif;
+}
+
 @media (max-width: 700px), (pointer: coarse) {
     .page-title {
         position: sticky;
         top: 0;
         z-index: 1;
         background: Canvas;
+    }
+
+    /* DIN headings leave about 16.5px above the ink and 42px below it. */
+    .page-title > svg {
+        height: 75px;
+    }
+
+    .page-title #page-heading,
+    .page-navigation--mobile #mobile_info-toggle {
+        transform: translateY(-7px);
+    }
+
+    .page-navigation--mobile #mobile_info-toggle > line {
+        transform-box: view-box;
+        transform-origin: center;
+        transform: scale(1.25);
     }
 
     .page-navigation {
