@@ -1,6 +1,8 @@
 file(MAKE_DIRECTORY "${DIST}/fonts")
 file(COPY "${SITE_SOURCE}/favicon.ico" "${SITE_SOURCE}/pages/page.css"
     "${CMAKE_CURRENT_LIST_DIR}/site.css" DESTINATION "${DIST}")
+file(COPY "${SITE_SOURCE}/pages/favicon" DESTINATION "${DIST}"
+    FILES_MATCHING PATTERN "*.png")
 
 foreach(font IN ITEMS
     "random/fonts/IBM-VGA-8x16.woff"

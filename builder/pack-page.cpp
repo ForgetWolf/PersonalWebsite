@@ -131,18 +131,35 @@ static cmark_node *friend_card(const char *label)
     for (char *letter = uri->server; *letter; letter++)
         *letter = (char)tolower((unsigned char)*letter);
     char initial[] = {(char)toupper((unsigned char)*uri->server), '\0'};
-    int ymckc = strcmp(uri->server, "ymckc.monster") == 0;
+    const char *local_icon = nullptr;
+    if (strcmp(uri->server, "azote.top") == 0)
+        local_icon = "azote";
+    else if (strcmp(uri->server, "blog.struggle.work") == 0)
+        local_icon = "watchdogexd";
+    else if (strcmp(uri->server, "linusaur.net") == 0)
+        local_icon = "linusaur";
+    else if (strcmp(uri->server, "ymckc.monster") == 0)
+        local_icon = "ymckc";
 
     add(html, "<div class=\"friend-entry\"><div class=\"friend-mark\" aria-hidden=\"true\">");
-    xmlChar *escaped_origin = escape((const char *)origin);
-    add(html, "<object class=\"friend-icon\" data=\"");
-    add(html, (const char *)escaped_origin);
-    add(html, "/favicon.ico\" type=\"");
-    add(html, ymckc ? "image/gif" : "image/x-icon");
-    add(html, "\">");
-    add(html, "<span class=\"friend-initial\">");
-    add(html, initial);
-    add(html, "</span></object></div><a href=\"");
+    if (local_icon) {
+        add(html, "<picture><source media=\"(prefers-color-scheme: dark)\" srcset=\"../favicon/");
+        add(html, local_icon);
+        add(html, "-dark.png\"><img class=\"friend-icon\" src=\"../favicon/");
+        add(html, local_icon);
+        add(html, "-light.png\" alt=\"");
+        add(html, initial);
+        add(html, "\"></picture>");
+    } else {
+        xmlChar *escaped_origin = escape((const char *)origin);
+        add(html, "<object class=\"friend-icon\" data=\"");
+        add(html, (const char *)escaped_origin);
+        add(html, "/favicon.ico\" type=\"image/x-icon\"><span class=\"friend-initial\">");
+        add(html, initial);
+        add(html, "</span></object>");
+        xmlFree(escaped_origin);
+    }
+    add(html, "</div><a href=\"");
     xmlChar *escaped_url = escape(address);
     xmlChar *escaped_label = escape(label);
     add(html, (const char *)escaped_url);
@@ -154,7 +171,6 @@ static cmark_node *friend_card(const char *label)
     if (!card || !cmark_node_set_on_enter(card, (const char *)xmlBufferContent(html)))
         fail("Cannot create", "friend entry");
     xmlFree(origin);
-    xmlFree(escaped_origin);
     xmlFree(escaped_url);
     xmlFree(escaped_label);
     xmlFreeURI(uri);
@@ -194,15 +210,22 @@ static void add_friend_cards(cmark_node *document, char *body)
         /* Keep a multi-line paragraph when the last source line is inside a span. */
         if (!tail && cmark_node_get_start_line(node) != end)
             continue;
-        if (!cmark_node_insert_after(node, friend_card(label)))
-            fail("Cannot insert", "friend entry");
+        cmark_node *card = cmark_node_new(CMARK_NODE_CUSTOM_BLOCK);
+        if (!card || !cmark_node_set_on_enter(card, "<div class=\"friend-card\">") ||
+            !cmark_node_set_on_exit(card, "</div>") || !cmark_node_insert_after(node, card))
+            fail("Cannot insert", "friend card");
         if (!tail) {
             cmark_node_free(node);
-            continue;
+        } else {
+            while (cmark_node_next(tail))
+                cmark_node_free(cmark_node_next(tail));
+            cmark_node_free(tail);
+            cmark_node_unlink(node);
+            if (!cmark_node_append_child(card, node))
+                fail("Cannot insert", "friend description");
         }
-        while (cmark_node_next(tail))
-            cmark_node_free(cmark_node_next(tail));
-        cmark_node_free(tail);
+        if (!cmark_node_append_child(card, friend_card(label)))
+            fail("Cannot insert", "friend link");
     }
     xmlRegFreeRegexp(url);
 }

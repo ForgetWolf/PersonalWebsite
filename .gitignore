@@ -7,6 +7,7 @@ dist/
 /build/
 /backup/
 /test/
+/draft/
 AGENTS.md
 
 # Local project metadata and credentials
