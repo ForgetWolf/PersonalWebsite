@@ -126,26 +126,23 @@ static cmark_node *friend_card(const char *label)
     if (!origin)
         fail("Cannot allocate", "friend URL");
     xmlURIPtr uri = xmlParseURI((const char *)origin);
-    xmlFree(origin);
     if (!uri || !uri->server)
         fail("Invalid friend URL", label);
     for (char *letter = uri->server; *letter; letter++)
         *letter = (char)tolower((unsigned char)*letter);
     char initial[] = {(char)toupper((unsigned char)*uri->server), '\0'};
-    int linusaur = strcmp(uri->server, "linusaur.net") == 0;
     int ymckc = strcmp(uri->server, "ymckc.monster") == 0;
 
     add(html, "<div class=\"friend-entry\"><div class=\"friend-mark\" aria-hidden=\"true\">");
-    if (linusaur)
-        add(html, "<object class=\"friend-icon\" data=\"https://linusaur.net/favicon.ico\" type=\"image/x-icon\">");
-    if (ymckc)
-        add(html, "<object class=\"friend-icon\" data=\"https://ymckc.monster/favicon.ico\" type=\"image/gif\">");
+    xmlChar *escaped_origin = escape((const char *)origin);
+    add(html, "<object class=\"friend-icon\" data=\"");
+    add(html, (const char *)escaped_origin);
+    add(html, "/favicon.ico\" type=\"");
+    add(html, ymckc ? "image/gif" : "image/x-icon");
+    add(html, "\">");
     add(html, "<span class=\"friend-initial\">");
     add(html, initial);
-    add(html, "</span>");
-    if (linusaur || ymckc)
-        add(html, "</object>");
-    add(html, "</div><a href=\"");
+    add(html, "</span></object></div><a href=\"");
     xmlChar *escaped_url = escape(address);
     xmlChar *escaped_label = escape(label);
     add(html, (const char *)escaped_url);
@@ -156,6 +153,8 @@ static cmark_node *friend_card(const char *label)
     cmark_node *card = cmark_node_new(CMARK_NODE_CUSTOM_BLOCK);
     if (!card || !cmark_node_set_on_enter(card, (const char *)xmlBufferContent(html)))
         fail("Cannot create", "friend entry");
+    xmlFree(origin);
+    xmlFree(escaped_origin);
     xmlFree(escaped_url);
     xmlFree(escaped_label);
     xmlFreeURI(uri);

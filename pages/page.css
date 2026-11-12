@@ -73,9 +73,9 @@ body {
         background: Canvas;
     }
 
-    /* DIN headings leave about 16.5px above the ink and 42px below it. */
+    /* Match the space below the DIN lettering to the space above it. */
     .page-title > svg {
-        height: 75px;
+        height: 59px;
     }
 
     .page-title #page-heading,
