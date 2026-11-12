@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "random"))
 import markdown
 from markdown.extensions import Extension
 from markdown.inlinepatterns import SimpleTagInlineProcessor
-from info_toggle import add_info_toggle
+from info_toggle import add_info_toggle, make_info_toggle_fullscreen
 from din_lettering import outline_text
 
 S = "{http://www.w3.org/2000/svg}"
@@ -84,6 +84,33 @@ def read_page(name):
     body = markdown.markdown(source, extensions=["extra", "nl2br", StrikethroughExtension()])
     return metadata, body
 
+def render_navigation(name, fullscreen=False):
+    root = ET.Element(S + "svg", {"width": "100%", "height": "100%" if fullscreen else "100"})
+    add_info_toggle(root, active_page=name)
+    if fullscreen:
+        make_info_toggle_fullscreen(root)
+        # Each layout needs its own IDs so SMIL events resolve to the visible controls.
+        for node in root.iter():
+            if "id" in node.attrib:
+                node.set("id", "mobile_" + node.get("id"))
+            for attribute in ("begin", "end"):
+                event = node.get(attribute)
+                if event and event.startswith(("infoOpen.click", "infoClose.click")):
+                    node.set(attribute, "mobile_" + event)
+    else:
+        toggle = root.find(S + "svg[@id='info-toggle']")
+        toggle.insert(0, ET.Element(S + "rect", {
+            "x": "-30", "y": "-30", "width": "60", "height": "60", "rx": "8", "fill": "Canvas",
+        }))
+    outline_text(root)
+    links = list(root.iter(S + "a"))
+    assert [a.get("aria-label") for a in links] == [
+        "Main" if label.lower() == name else label for label in ("About", "Blog", "Friends", "Contact")
+    ]
+    assert next(a for a in links if a.get("aria-label") == "Main").get("href") == "https://forgetwolf.net/"
+    return ET.tostring(root, encoding="unicode")
+
+
 for name in ("about","friends","contact"):
     metadata, body = read_page(name)
     title = name.title()
@@ -95,16 +122,8 @@ for name in ("about","friends","contact"):
     ET.SubElement(heading,S+"text",{
         "x":"0","y":"57.6","font-size":"57.6","fill":"CanvasText",
     }).text = title
-    root = ET.Element(S+"svg", {"width":"100%","height":"100"})
-    add_info_toggle(root,active_page=name)
-    toggle = root.find(S+"svg[@id='info-toggle']")
-    toggle.insert(0, ET.Element(S+"rect", {
-        "x": "-30", "y": "-30", "width": "60", "height": "60", "rx": "8", "fill": "Canvas",
-    }))
     outline_text(title_svg)
     title_markup = ET.tostring(title_svg,encoding="unicode")
-    outline_text(root)
-    svg = ET.tostring(root,encoding="unicode")
     html = f'''<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -114,7 +133,8 @@ for name in ("about","friends","contact"):
 <link rel="stylesheet" href="../page.css">
 </head><body>
 <div class="page-title">{title_markup}</div>
-<div class="page-navigation">{svg}</div>
+<div class="page-navigation">{render_navigation(name)}</div>
+<div class="page-navigation page-navigation--mobile">{render_navigation(name, fullscreen=True)}</div>
 <div class="page-copy">
 <header class="page-summary">
 <p>{escape(metadata.get('desc', ''))}</p>
@@ -127,7 +147,4 @@ for name in ("about","friends","contact"):
     output = ROOT / "pages" / name / "index.html"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(html, encoding="utf-8")
-    links = list(root.iter(S+"a"))
-    assert [a.get('aria-label') for a in links] == ['Main' if label.lower()==name else label for label in ('About','Blog','Friends','Contact')]
-    assert next(a for a in links if a.get('aria-label')=='Main').get('href')=='https://forgetwolf.net/'
 print('Built About, Friends and Contact from source Markdown; main unchanged.')
