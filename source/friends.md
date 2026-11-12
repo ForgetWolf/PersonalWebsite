@@ -11,7 +11,7 @@ azote.top
 
 
 某大猫
-https://blog.struggle.work/
+blog.struggle.work
 
 
 
