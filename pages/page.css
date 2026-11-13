@@ -65,6 +65,54 @@ body {
     font-family: "GOST Lettering", "DIN 1451", "Noto Serif SC", serif;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+    @view-transition {
+        navigation: auto;
+    }
+
+    ::view-transition {
+        background: Canvas;
+    }
+
+    ::view-transition-old(root) {
+        animation: page-shrink-out 200ms cubic-bezier(1, 0, 1, 1) 200ms both;
+        mix-blend-mode: normal;
+    }
+
+    ::view-transition-new(root) {
+        animation: page-reveal 400ms step-end both;
+        mix-blend-mode: normal;
+    }
+
+    .page-copy {
+        transform-origin: top left;
+        animation: page-expand-in 300ms cubic-bezier(0, 0, 0, 1);
+    }
+
+    /* Start the incoming content as soon as the outgoing snapshot clears. */
+    :root:active-view-transition .page-copy {
+        animation-play-state: paused;
+    }
+
+    .page-copy:focus-within {
+        animation: none;
+    }
+}
+
+@keyframes page-shrink-out {
+    to { transform: scale(0.9); }
+}
+
+@keyframes page-reveal {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes page-expand-in {
+    from { transform: scale(0.9); }
+    to { transform: scale(1); }
+}
+
 @media (max-width: 700px), (pointer: coarse) {
     .page-title {
         position: sticky;
