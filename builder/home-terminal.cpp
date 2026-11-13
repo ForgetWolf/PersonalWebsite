@@ -605,17 +605,6 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
         const double left = row ? 16 : prefix, top = baseline + row * line_height;
         if (cells[row].empty())
             continue;
-        std::string id = "output-line-clip-" + std::to_string(row);
-        xmlNodePtr clip = element(defs, "clipPath");
-        prop(clip, "id", id.c_str());
-        xmlNodePtr rect = element(clip, "rect");
-        numeric(rect, "x", left);
-        numeric(rect, "y", top - font_size);
-        prop(rect, "width", "0");
-        numeric(rect, "height", line_height);
-        Track width = new_track(trace);
-        width.duration = output_duration;
-        numeric_keyframe(&width, 0, 0);
         xmlNodePtr group = element(paper, "g");
         prop(group, "id", ("bf-output-line-" + std::to_string(row + 1)).c_str());
         if (row) {
@@ -626,21 +615,6 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
         prop(rising, "fill", "CanvasText");
         prop(rising, "aria-hidden", "true");
         prop(rising, "pointer-events", "none");
-        size_t column = 0;
-        std::string line;
-        for (const size_t i : cells[row]) {
-            const unsigned char byte = trace->output[i - 1];
-            const double time = typing_times[i];
-            const auto &reference = glyph_references[byte];
-            const bool pop = !whitespace(byte) && !reference.empty();
-            if (pop)
-                add_rising_glyph(rising, reference, left + column * advance, top, font_size, units, time);
-            line += utf8(&byte, 1);
-            numeric_keyframe(&width, time + (pop ? rise_duration : 0), ++column * advance);
-        }
-        numeric_keyframe(&width, width.duration, column * advance);
-        end_track(rect, "width", nullptr, &width);
-
         xmlNodePtr text = element(group, "text");
         numeric(text, "x", left);
         numeric(text, "y", top);
@@ -648,11 +622,25 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
         prop(text, "fill", "CanvasText");
         prop(text, "font-family", "VGA Terminal");
         xmlNodeSetSpacePreserve(text, 1);
-        xmlAddChild(text, xmlNewText(BAD_CAST line.c_str()));
-        prop(text, "clip-path", ("url(#" + id + ")").c_str());
+        size_t column = 0;
+        for (const size_t i : cells[row]) {
+            const unsigned char byte = trace->output[i - 1];
+            const double time = typing_times[i];
+            const auto &reference = glyph_references[byte];
+            const bool pop = !whitespace(byte) && !reference.empty();
+            const double x = left + column++ * advance;
+            if (pop)
+                add_rising_glyph(rising, reference, x, top, font_size, units, time);
+            const auto character = utf8(&byte, 1);
+            // A letter enters the rendered and selectable text together.
+            xmlNodePtr span = element(text, "tspan");
+            numeric(span, "x", x);
+            prop(span, "display", "none");
+            xmlAddChild(span, xmlNewText(BAD_CAST character.c_str()));
+            show_at(span, "display", "inline", time + (pop ? rise_duration : 0));
+        }
         const double end = typing_times[cells[row].back()] + pop_duration;
         show_at(rising, "display", "none", end);
-        show_at(text, "clip-path", "none", end);
     }
     xmlAddChild(paper, cursor);
     return height * 1.2;

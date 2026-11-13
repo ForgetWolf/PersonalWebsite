@@ -121,9 +121,9 @@ body {
         background: Canvas;
     }
 
-    /* Add half the top inset below the lettering, accounting for SVG scaling. */
+    /* Add roughly one top inset below the lettering, accounting for SVG scaling. */
     .page-title > svg {
-        height: calc(59px + max(0px, min(2.08vw, 8.3px) - 3.5px));
+        height: calc(59px + max(0px, min(4.16vw, 16.6px) - 7px));
     }
 
     .page-title #page-heading,
