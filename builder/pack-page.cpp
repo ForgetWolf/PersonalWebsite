@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <array>
+#include <string>
+#include <string_view>
 
 #include <cmark-gfm.h>
 #include <cmark-gfm-extension_api.h>
@@ -136,6 +139,8 @@ static cmark_node *friend_card(const char *label)
         local_icon = "azote";
     else if (strcmp(uri->server, "blog.struggle.work") == 0)
         local_icon = "watchdogexd";
+    else if (strcmp(uri->server, "r18.forgetwolf.net") == 0)
+        local_icon = "forgetwolf-r18";
     else if (strcmp(uri->server, "linusaur.net") == 0)
         local_icon = "linusaur";
     else if (strcmp(uri->server, "ymckc.monster") == 0)
@@ -179,7 +184,93 @@ static cmark_node *friend_card(const char *label)
     return card;
 }
 
-static void add_friend_cards(cmark_node *document, char *body)
+struct CoverFriend {
+    std::string name;
+    std::string label;
+    std::string url;
+    std::string_view icon;
+    std::string_view extension;
+    std::string_view color;
+};
+
+using CoverFriends = std::array<CoverFriend, 4>;
+
+static void record_cover_friend(CoverFriends &friends, const char *address,
+                                cmark_node *description, int options, cmark_llist *extensions)
+{
+    const std::string absolute = strstr(address, "://") ? address : std::string("https://") + address;
+    xmlURIPtr uri = xmlParseURI(absolute.c_str());
+    if (!uri)
+        return;
+    const struct {
+        const char *host, *icon, *extension, *color;
+    } covers[] = {
+        {"azote.top", "azote-pixel", "png", "#e2535b"},
+        {"r18.forgetwolf.net", "forgetwolf-r18", "png", "#22a699"},
+        {"linusaur.net", "linusaur", "svg", "#5b8fe8"},
+        {"ymckc.monster", "ymckc", "png", "#d3ab26"},
+    };
+    const auto *cover = covers;
+    for (; cover != covers + friends.size(); ++cover)
+        if (uri->server && xmlStrcasecmp(BAD_CAST uri->server, BAD_CAST cover->host) == 0)
+            break;
+    xmlFreeURI(uri);
+    if (cover == covers + friends.size())
+        return;
+
+    size_t index = 0;
+    while (index < friends.size() && !friends[index].url.empty()) {
+        if (friends[index].icon == cover->icon)
+            return;
+        ++index;
+    }
+    if (index == friends.size())
+        return;
+    CoverFriend &entry = friends[index];
+    entry.icon = cover->icon;
+    entry.extension = cover->extension;
+    entry.color = cover->color;
+    xmlChar *escaped_url = escape(absolute.c_str());
+    entry.url = reinterpret_cast<const char *>(escaped_url);
+    xmlFree(escaped_url);
+    std::string label = address;
+    if (description) {
+        char *rendered = cmark_render_html(description, options, extensions);
+        if (!rendered)
+            fail("Cannot render", "friend name");
+        std::string_view markup(rendered);
+        if (markup.size() >= 8 && markup.substr(0, 3) == "<p>" &&
+            markup.substr(markup.size() - 5) == "</p>\n")
+            entry.name = markup.substr(3, markup.size() - 8);
+        free(rendered);
+
+        cmark_iter *iter = cmark_iter_new(description);
+        if (!iter)
+            fail("Cannot read", "friend name");
+        label.clear();
+        for (auto event = cmark_iter_next(iter); event != CMARK_EVENT_DONE; event = cmark_iter_next(iter)) {
+            if (event != CMARK_EVENT_ENTER)
+                continue;
+            cmark_node *node = cmark_iter_get_node(iter);
+            const auto type = cmark_node_get_type(node);
+            if (type == CMARK_NODE_TEXT || type == CMARK_NODE_CODE)
+                label += cmark_node_get_literal(node);
+            else if (type == CMARK_NODE_SOFTBREAK || type == CMARK_NODE_LINEBREAK)
+                label += ' ';
+        }
+        cmark_iter_free(iter);
+        if (label.empty())
+            label = address;
+    }
+    xmlChar *escaped_label = escape(label.c_str());
+    entry.label = reinterpret_cast<const char *>(escaped_label);
+    if (entry.name.empty())
+        entry.name = entry.label;
+    xmlFree(escaped_label);
+}
+
+static bool add_friend_cards(cmark_node *document, char *body, CoverFriends &friends,
+                             int options, cmark_llist *extensions)
 {
     xmlRegexpPtr url = xmlRegexpCompile(BAD_CAST
         "([Hh][Tt][Tt][Pp][Ss]?://)?([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\\.)+"
@@ -189,6 +280,7 @@ static void add_friend_cards(cmark_node *document, char *body)
     int line_number = 1;
     char *line = body;
     char *next_line_start = next_line(line);
+    size_t cards = 0;
     for (cmark_node *node = cmark_node_first_child(document), *next; node; node = next) {
         next = cmark_node_next(node);
         if (cmark_node_get_type(node) != CMARK_NODE_PARAGRAPH)
@@ -226,11 +318,22 @@ static void add_friend_cards(cmark_node *document, char *body)
         }
         if (!cmark_node_append_child(card, friend_card(label)))
             fail("Cannot insert", "friend link");
+        record_cover_friend(friends, label, tail ? node : nullptr, options, extensions);
+        ++cards;
     }
     xmlRegFreeRegexp(url);
+    size_t blocks = 0;
+    for (auto *node = cmark_node_first_child(document); node; node = cmark_node_next(node))
+        ++blocks;
+    if (cards != friends.size() || blocks != cards)
+        return false;
+    for (const auto &entry : friends)
+        if (entry.url.empty())
+            return false;
+    return true;
 }
 
-static char *render_markdown(char *body, int friends)
+static char *render_markdown(char *body, CoverFriends *friends, bool &use_coverflow)
 {
     const int options = CMARK_OPT_HARDBREAKS | CMARK_OPT_FOOTNOTES |
                         CMARK_OPT_STRIKETHROUGH_DOUBLE_TILDE | CMARK_OPT_VALIDATE_UTF8;
@@ -249,7 +352,8 @@ static char *render_markdown(char *body, int friends)
     if (!document)
         fail("Cannot parse", "Markdown");
     if (friends)
-        add_friend_cards(document, body);
+        use_coverflow = add_friend_cards(document, body, *friends, options,
+                                         cmark_parser_get_syntax_extensions(parser));
     char *html = cmark_render_html(document, options, cmark_parser_get_syntax_extensions(parser));
     cmark_node_free(document);
     cmark_parser_free(parser);
@@ -261,14 +365,58 @@ static char *render_markdown(char *body, int friends)
     return html;
 }
 
-static void write_page(const char *path, const char *markup,
-                       const char *description, const char *date, const char *body)
+static std::string render_coverflow(std::string_view markup, const CoverFriends &friends)
 {
+    std::string output;
+    while (!markup.empty()) {
+        const auto start = markup.find("@@");
+        output += markup.substr(0, start);
+        if (start == std::string_view::npos)
+            break;
+        const auto end = markup.find("@@", start + 2);
+        if (end == std::string_view::npos)
+            fail("Unclosed", "friend template marker");
+        const auto marker = markup.substr(start + 2, end - start - 2);
+        const auto index = static_cast<size_t>(marker.empty() ? -1 : marker.back() - '0');
+        if (index >= friends.size())
+            fail("Invalid", "friend template marker");
+        const auto key = marker.substr(0, marker.size() - 1);
+        const auto &entry = friends[index];
+        if (key == "FRIEND_NAME_")
+            output += entry.name;
+        else if (key == "FRIEND_LABEL_")
+            output += entry.label;
+        else if (key == "FRIEND_URL_")
+            output += entry.url;
+        else if (key == "FRIEND_COLOR_")
+            output += entry.color;
+        else if (key == "FRIEND_ICON_DARK_" || key == "FRIEND_ICON_LIGHT_") {
+            output += entry.icon;
+            output += key == "FRIEND_ICON_DARK_" ? "-dark." : "-light.";
+            output += entry.extension;
+        }
+        else
+            fail("Unknown", "friend template marker");
+        markup.remove_prefix(end + 2);
+    }
+    return output;
+}
+
+static void write_page(const char *path, const char *markup,
+                       const char *description, const char *date, const char *body,
+                       const char *friend_style)
+{
+    const char *style_marker = "@@FRIEND_STYLE@@";
     const char *const markers[] = {"@@DESC@@", "@@DATE@@", "@@BODY@@"};
     const char *const values[] = {description, date, body};
     FILE *file = fopen(path, "wb");
     if (!file)
         fail("Cannot write", path);
+    if (const char *style = strstr(markup, style_marker)) {
+        fwrite(markup, 1, static_cast<size_t>(style - markup), file);
+        fputs(friend_style, file);
+        markup = style + strlen(style_marker);
+    }
     for (size_t i = 0; i < sizeof markers / sizeof markers[0]; i++) {
         const char *marker = strstr(markup, markers[i]);
         if (!marker)
@@ -285,16 +433,30 @@ static void write_page(const char *path, const char *markup,
 
 int main(int argc, char **argv)
 {
-    if (argc != 5)
-        fail("Usage", "pack-page PAGE INPUT_MD TEMPLATE OUTPUT_HTML");
+    if (argc != 5 && argc != 6)
+        fail("Usage", "pack-page PAGE INPUT_MD TEMPLATE OUTPUT_HTML [COVERFLOW_TEMPLATE]");
     char *source = read_text(argv[2]);
     char *markup = read_text(argv[3]);
     const char *description = "", *date = NULL;
     char *body = read_front_matter(source, &description, &date);
     xmlChar *escaped_description = escape(description);
     xmlChar *escaped_date = escape(date ? date : "");
-    char *html = render_markdown(body, strcmp(argv[1], "friends") == 0);
-    write_page(argv[4], markup, (const char *)escaped_description, (const char *)escaped_date, html);
+    const bool is_friends = strcmp(argv[1], "friends") == 0;
+    CoverFriends friends;
+    bool use_coverflow = false;
+    char *html = render_markdown(body, is_friends ? &friends : nullptr, use_coverflow);
+    std::string content = html;
+    const char *friend_style = "";
+    if (use_coverflow && argc == 6) {
+        char *cover_template = read_text(argv[5]);
+        content = render_coverflow(cover_template, friends);
+        free(cover_template);
+        friend_style = "<link rel=\"stylesheet\" href=\"../coverflow.css\">";
+    } else if (is_friends) {
+        content = "<main class=\"friend-list\">" + content + "</main>";
+    }
+    write_page(argv[4], markup, (const char *)escaped_description, (const char *)escaped_date,
+               content.c_str(), friend_style);
     free(html);
     xmlFree(escaped_description);
     xmlFree(escaped_date);

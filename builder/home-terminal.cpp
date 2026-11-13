@@ -198,7 +198,7 @@ static Track new_track(const TerminalTrace *trace)
     return Track{new_buffer(), new_buffer(), duration(trace)};
 }
 
-static void keyframe(Track *track, int time, const char *value)
+static void keyframe(Track *track, double time, const char *value)
 {
     char formatted[64];
     if (xmlBufferLength(track->times)) {
@@ -210,7 +210,7 @@ static void keyframe(Track *track, int time, const char *value)
     buffer_add(track->values, value);
 }
 
-static void numeric_keyframe(Track *track, int time, double value)
+static void numeric_keyframe(Track *track, double time, double value)
 {
     char formatted[64];
     decimal(formatted, value);
@@ -388,6 +388,72 @@ static int time_of_output(size_t index)
     return index ? 25 + (int)index * 9 : 0;
 }
 
+// Timeline times are in hundredths of a second.
+static constexpr double pop_duration = 4.8, rise_duration = pop_duration * .75;
+
+static void translate(xmlNodePtr node, double x, double y)
+{
+    char a[64], b[64], value[152];
+    decimal(a, x);
+    decimal(b, y);
+    snprintf(value, sizeof value, "translate(%s %s)", a, b);
+    prop(node, "transform", value);
+}
+
+static void begin_at(xmlNodePtr animation, double time)
+{
+    char offset[64], value[96];
+    decimal(offset, time / 100);
+    snprintf(value, sizeof value, "landingEnter.begin+%ss", offset);
+    prop(animation, "begin", value);
+}
+
+static void show_at(xmlNodePtr group, const char *attribute, const char *value,
+                    double time, const char *duration = nullptr)
+{
+    xmlNodePtr change = element(group, "set");
+    prop(change, "attributeName", attribute);
+    prop(change, "to", value);
+    begin_at(change, time);
+    if (duration)
+        prop(change, "dur", duration);
+    else
+        prop(change, "fill", "freeze");
+}
+
+static void add_rising_glyph(xmlNodePtr row, const std::string &reference,
+                             double left, double baseline, int font_size, int units,
+                             double time)
+{
+    xmlNodePtr slot = element(row, "g");
+    translate(slot, left, baseline);
+    prop(slot, "clip-path", "url(#output-glyph-slot)");
+    prop(slot, "visibility", "hidden");
+    char duration[72], number[64];
+    decimal(number, rise_duration / 100);
+    snprintf(duration, sizeof duration, "%ss", number);
+    show_at(slot, "visibility", "visible", time, duration);
+
+    xmlNodePtr moving = element(slot, "g");
+    xmlNodePtr glyph = element(moving, "use");
+    prop(glyph, "href", reference.c_str());
+    decimal(number, (double)font_size / units);
+    char value[160];
+    snprintf(value, sizeof value, "scale(%s -%s)", number, number);
+    prop(glyph, "transform", value);
+
+    xmlNodePtr animation = element(moving, "animateTransform");
+    prop(animation, "attributeName", "transform");
+    prop(animation, "type", "translate");
+    snprintf(value, sizeof value, "0 %d;0 %.2f;0 %.2f", font_size,
+             font_size * .40, font_size * .16);
+    prop(animation, "values", value);
+    prop(animation, "keyTimes", "0;0.2933333333;0.64");
+    prop(animation, "calcMode", "discrete");
+    prop(animation, "dur", duration);
+    begin_at(animation, time);
+}
+
 static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobile)
 {
     int font_size = mobile ? 20 : 15, line_height = mobile ? 24 : 18;
@@ -401,77 +467,165 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
     prop(box, "viewBox", value);
     numeric(box, "height", height * 1.2);
     numeric(box, "data-rows", (double)rows);
-    numeric(child(box, "rect"), "height", height - 2);
+    numeric(box, "data-line-height", line_height);
+    prop(box, "overflow", "hidden");
+    const double travel = (rows - 1) * line_height;
+    xmlNodePtr background = child(box, "rect");
+    numeric(background, "y", 1 + travel);
+    numeric(background, "height", height - 2 - travel);
+
+    xmlNodePtr defs = child(box, "defs");
+    xmlNodePtr paper_clip = element(defs, "clipPath");
+    prop(paper_clip, "id", "output-paper-clip");
+    xmlNodePtr paper_edge = xmlCopyNode(background, 1);
+    xmlAddChild(paper_clip, paper_edge);
+    xmlNodePtr viewport = element(box, "g");
+    prop(viewport, "clip-path", "url(#output-paper-clip)");
+    xmlNodePtr paper = element(viewport, "g");
+    prop(paper, "id", "output-paper");
+    translate(paper, 0, travel);
+
     xmlNodePtr cursor = require_id(box, "output-cursor");
+    xmlNodePtr label = require_id(box, "output-prefix");
+    xmlUnlinkNode(cursor);
+    xmlUnlinkNode(label);
+    xmlAddChild(paper, label);
     numeric(cursor, "x", prefix + 1);
-    numeric(cursor, "y", baseline - font_size + 2);
-    numeric(cursor, "width", font_size / 10.0);
-    numeric(cursor, "height", font_size);
-    Track x = new_track(trace), y = new_track(trace);
-    double last_x = 0, last_y = 0;
-    for (size_t i = 0; i < positions.size(); i++) {
-        Position p = positions[i];
+    numeric(cursor, "y", baseline);
+    numeric(cursor, "width", floor(advance));
+    numeric(cursor, "height", 2);
+    xmlNodePtr glow = require_id(defs, "output-cursor-glow");
+    prop(glow, "x", "-50%");
+    prop(glow, "width", "200%");
+    prop(glow, "y", "-250%");
+    prop(glow, "height", "600%");
+
+    xmlNodePtr slot = element(defs, "clipPath");
+    prop(slot, "id", "output-glyph-slot");
+    xmlNodePtr slot_edge = element(slot, "rect");
+    numeric(slot_edge, "y", -font_size);
+    numeric(slot_edge, "width", advance);
+    numeric(slot_edge, "height", font_size);
+
+    xmlDocPtr vga = read_xml("builder/templates/vga-glyphs.xml");
+    xmlNodePtr vga_root = xmlDocGetRootElement(vga);
+    const int units = int_prop(vga_root, "units");
+    std::string glyph_references[256];
+    for (xmlNodePtr node = vga_root->children; node; node = node->next) {
+        if (!named(node, "glyph"))
+            continue;
+        int code = int_prop(node, "code");
+        if (code < 0 || code > 255)
+            continue;
+        std::string id = "output-glyph-" + std::to_string(code);
+        glyph_references[code] = "#" + id;
+        xmlNodePtr glyph = element(defs, "path");
+        prop(glyph, "id", id.c_str());
+        xmlChar *path = xmlGetProp(node, BAD_CAST "path");
+        if (!path)
+            fail("Missing VGA outline", id.c_str());
+        prop(glyph, "d", reinterpret_cast<const char *>(path));
+        xmlFree(path);
+    }
+    xmlFreeDoc(vga);
+
+    Track x = new_track(trace), y = new_track(trace), feed = new_track(trace);
+    Track paper_top = new_track(trace), paper_height = new_track(trace);
+    auto feed_frame = [&](int time, double offset) {
+        char number[64], value[72];
+        decimal(number, offset);
+        snprintf(value, sizeof value, "0 %s", number);
+        keyframe(&feed, time, value);
+        numeric_keyframe(&paper_top, time, 1 + offset);
+        numeric_keyframe(&paper_height, time, height - 2 - offset);
+    };
+    feed_frame(0, travel);
+    double last_x = prefix + 1, last_y = baseline;
+    std::vector<std::vector<size_t>> cells(rows);
+    for (size_t i = 0; i < positions.size(); ++i) {
+        const Position p = positions[i];
+        const int time = time_of_output(i);
+        const bool wrap = i && p.row != positions[i - 1].row;
+        const unsigned char byte = i ? trace->output[i - 1] : ' ';
+        const bool pop = !whitespace(byte) && !glyph_references[byte].empty();
         last_x = (p.row ? 16 : prefix) + 1 + p.column * advance;
-        last_y = baseline - font_size + 2 + p.row * line_height;
-        numeric_keyframe(&x, time_of_output(i), last_x);
-        numeric_keyframe(&y, time_of_output(i), last_y);
+        last_y = baseline + p.row * line_height;
+        if (wrap) {
+            const double offset = travel - p.row * line_height;
+            feed_frame(time, offset + line_height);
+            feed_frame(time + 16, offset);
+            if (pop)
+                numeric_keyframe(&x, time, last_x - advance);
+        }
+        numeric_keyframe(&x, time + (pop ? pop_duration : 0), last_x);
+        numeric_keyframe(&y, time, last_y);
+        if (p.column)
+            cells[p.row].push_back(i);
     }
     numeric_keyframe(&x, x.duration, last_x);
     numeric_keyframe(&y, y.duration, last_y);
-    end_track(cursor, "x", NULL, &x);
-    end_track(cursor, "y", NULL, &y);
+    feed_frame(feed.duration, 0);
+    end_track(cursor, "x", nullptr, &x);
+    end_track(cursor, "y", nullptr, &y);
+    end_track(paper, "transform", "translate", &feed);
+    end_track(background, "y", nullptr, &paper_top);
+    end_track(background, "height", nullptr, &paper_height);
+    prop(xmlLastElementChild(paper), "calcMode", "linear");
+    for (xmlNodePtr animation = xmlFirstElementChild(background); animation;
+         animation = xmlNextElementSibling(animation)) {
+        prop(animation, "calcMode", "linear");
+        xmlAddChild(paper_edge, xmlCopyNode(animation, 1));
+    }
 
-    xmlNodePtr metadata = NULL;
-    for (xmlNodePtr node = box->children; node; node = node->next)
-        if (named(node, "metadata"))
-            metadata = node;
-    if (metadata)
-        xmlUnlinkNode(metadata);
-    size_t start = 0;
-    for (size_t row = 0; row < rows; row++) {
-        double left = row ? 16 : prefix, top = baseline + row * line_height;
-        char id[64];
-        snprintf(id, sizeof id, "output-line-clip-%u", (unsigned)row);
-        xmlNodePtr clip = element(child(box, "defs"), "clipPath");
-        prop(clip, "id", id);
+    for (size_t row = 0; row < rows; ++row) {
+        const double left = row ? 16 : prefix, top = baseline + row * line_height;
+        if (cells[row].empty())
+            continue;
+        std::string id = "output-line-clip-" + std::to_string(row);
+        xmlNodePtr clip = element(defs, "clipPath");
+        prop(clip, "id", id.c_str());
         xmlNodePtr rect = element(clip, "rect");
         numeric(rect, "x", left);
         numeric(rect, "y", top - font_size);
         prop(rect, "width", "0");
         numeric(rect, "height", line_height);
         Track width = new_track(trace);
-        size_t columns = 0;
-        for (size_t i = 0; i < positions.size(); i++) {
-            if (positions[i].row == row)
-                columns = positions[i].column;
-            numeric_keyframe(&width, time_of_output(i), columns * advance);
+        numeric_keyframe(&width, 0, 0);
+        xmlNodePtr group = element(paper, "g");
+        prop(group, "id", ("bf-output-line-" + std::to_string(row + 1)).c_str());
+        xmlNodePtr rising = element(group, "g");
+        prop(rising, "fill", "CanvasText");
+        prop(rising, "aria-hidden", "true");
+        prop(rising, "pointer-events", "none");
+        size_t column = 0;
+        std::string line;
+        for (const size_t i : cells[row]) {
+            const unsigned char byte = trace->output[i - 1];
+            const double time = time_of_output(i);
+            const auto &reference = glyph_references[byte];
+            const bool pop = !whitespace(byte) && !reference.empty();
+            if (pop)
+                add_rising_glyph(rising, reference, left + column * advance, top, font_size, units, time);
+            line += utf8(&byte, 1);
+            numeric_keyframe(&width, time + (pop ? rise_duration : 0), ++column * advance);
         }
-        numeric_keyframe(&width, width.duration, columns * advance);
-        end_track(rect, "width", NULL, &width);
-        snprintf(value, sizeof value, "url(#%s)", id);
-        xmlNodePtr group = element(box, "g");
-        snprintf(id, sizeof id, "bf-output-line-%u", (unsigned)row + 1);
-        prop(group, "id", id);
+        numeric_keyframe(&width, width.duration, column * advance);
+        end_track(rect, "width", nullptr, &width);
+
         xmlNodePtr text = element(group, "text");
         numeric(text, "x", left);
         numeric(text, "y", top);
         numeric(text, "font-size", font_size);
         prop(text, "fill", "CanvasText");
         prop(text, "font-family", "VGA Terminal");
-        prop(text, "clip-path", value);
         xmlNodeSetSpacePreserve(text, 1);
-        while (start < trace->output.size() && positions[start + 1].row < row)
-            start++;
-        if (start < trace->output.size() && trace->output[start] == '\n' &&
-            positions[start + 1].row == row)
-            start++;
-        const auto line = utf8(trace->output.data() + start, columns);
-        if (columns)
-            xmlAddChild(text, xmlNewText(BAD_CAST line.c_str()));
-        start += columns;
+        xmlAddChild(text, xmlNewText(BAD_CAST line.c_str()));
+        prop(text, "clip-path", ("url(#" + id + ")").c_str());
+        const double end = time_of_output(cells[row].back()) + pop_duration;
+        show_at(rising, "display", "none", end);
+        show_at(text, "clip-path", "none", end);
     }
-    if (metadata)
-        xmlAddChild(box, metadata);
+    xmlAddChild(paper, cursor);
     return height * 1.2;
 }
 

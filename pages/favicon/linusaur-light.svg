@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144">
+  <title>Linusaur</title>
+  <g stroke="#000" stroke-width="3.5" stroke-linejoin="miter">
+    <path fill="#fff" d="M12 90 23 80H94L105 90V116L96 125H12Z"/>
+    <path fill="none" d="M12 91H95L105 90M95 91V125"/>
+    <path fill="#000" stroke="none" d="M23 99H37V102H23ZM42 104H78V110H42ZM83 99H89V103H83Z"/>
+    <path fill="#fff" d="M74 85V93H112V85"/>
+    <path fill="#fff" d="M63 27H130V86H63Z"/>
+    <path fill="#000" stroke="none" d="M69 33H124V72H69Z"/>
+    <path fill="#fff" stroke="none" d="M74 38H79V41H74ZM82 38H87V41H82ZM90 38H95V41H90ZM98 38H103V41H98ZM101 46H108V53H101ZM101 55H106V60H111V63H106V68H103V63H98V60H101Z"/>
+    <path fill="#000" stroke="none" d="M115 77H123V81H115Z"/>
+  </g>
+</svg>
