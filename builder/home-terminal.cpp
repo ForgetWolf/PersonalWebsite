@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <math.h>
+#include <algorithm>
 #include <vector>
 #include <string>
 #include "home-terminal.h"
@@ -390,6 +391,7 @@ static int time_of_output(size_t index)
 
 // Timeline times are in hundredths of a second.
 static constexpr double pop_duration = 4.8, rise_duration = pop_duration * .75;
+static constexpr double paper_feed_duration = 16;
 
 static void translate(xmlNodePtr node, double x, double y)
 {
@@ -529,9 +531,26 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
     }
     xmlFreeDoc(vga);
 
+    // Finish feeding the paper before placing any ink on the new row.
+    std::vector<double> typing_times(positions.size());
+    std::vector<double> feed_starts(rows), row_ready(rows);
+    for (size_t i = 1; i < positions.size(); ++i) {
+        const size_t row = positions[i].row;
+        double time = std::max<double>(time_of_output(i), typing_times[i - 1] + pop_duration);
+        if (row != positions[i - 1].row) {
+            feed_starts[row] = time;
+            row_ready[row] = time + paper_feed_duration;
+        }
+        typing_times[i] = std::max(time, row_ready[row]);
+    }
+    const int output_duration = std::max(duration(trace),
+        static_cast<int>(ceil(typing_times.back() + pop_duration)) + 1);
     Track x = new_track(trace), y = new_track(trace), feed = new_track(trace);
+    Track caret_visibility = new_track(trace);
     Track paper_top = new_track(trace), paper_height = new_track(trace);
-    auto feed_frame = [&](int time, double offset) {
+    x.duration = y.duration = feed.duration = caret_visibility.duration =
+        paper_top.duration = paper_height.duration = output_duration;
+    auto feed_frame = [&](double time, double offset) {
         char number[64], value[72];
         decimal(number, offset);
         snprintf(value, sizeof value, "0 %s", number);
@@ -540,11 +559,12 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
         numeric_keyframe(&paper_height, time, height - 2 - offset);
     };
     feed_frame(0, travel);
+    keyframe(&caret_visibility, 0, "visible");
     double last_x = prefix + 1, last_y = baseline;
     std::vector<std::vector<size_t>> cells(rows);
     for (size_t i = 0; i < positions.size(); ++i) {
         const Position p = positions[i];
-        const int time = time_of_output(i);
+        const double time = typing_times[i];
         const bool wrap = i && p.row != positions[i - 1].row;
         const unsigned char byte = i ? trace->output[i - 1] : ' ';
         const bool pop = !whitespace(byte) && !glyph_references[byte].empty();
@@ -552,8 +572,10 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
         last_y = baseline + p.row * line_height;
         if (wrap) {
             const double offset = travel - p.row * line_height;
-            feed_frame(time, offset + line_height);
-            feed_frame(time + 16, offset);
+            feed_frame(feed_starts[p.row], offset + line_height);
+            feed_frame(row_ready[p.row], offset);
+            keyframe(&caret_visibility, feed_starts[p.row], "hidden");
+            keyframe(&caret_visibility, row_ready[p.row], "visible");
             if (pop)
                 numeric_keyframe(&x, time, last_x - advance);
         }
@@ -564,9 +586,11 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
     }
     numeric_keyframe(&x, x.duration, last_x);
     numeric_keyframe(&y, y.duration, last_y);
+    keyframe(&caret_visibility, caret_visibility.duration, "visible");
     feed_frame(feed.duration, 0);
     end_track(cursor, "x", nullptr, &x);
     end_track(cursor, "y", nullptr, &y);
+    end_track(cursor, "visibility", nullptr, &caret_visibility);
     end_track(paper, "transform", "translate", &feed);
     end_track(background, "y", nullptr, &paper_top);
     end_track(background, "height", nullptr, &paper_height);
@@ -590,9 +614,14 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
         prop(rect, "width", "0");
         numeric(rect, "height", line_height);
         Track width = new_track(trace);
+        width.duration = output_duration;
         numeric_keyframe(&width, 0, 0);
         xmlNodePtr group = element(paper, "g");
         prop(group, "id", ("bf-output-line-" + std::to_string(row + 1)).c_str());
+        if (row) {
+            prop(group, "display", "none");
+            show_at(group, "display", "inline", row_ready[row]);
+        }
         xmlNodePtr rising = element(group, "g");
         prop(rising, "fill", "CanvasText");
         prop(rising, "aria-hidden", "true");
@@ -601,7 +630,7 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
         std::string line;
         for (const size_t i : cells[row]) {
             const unsigned char byte = trace->output[i - 1];
-            const double time = time_of_output(i);
+            const double time = typing_times[i];
             const auto &reference = glyph_references[byte];
             const bool pop = !whitespace(byte) && !reference.empty();
             if (pop)
@@ -621,7 +650,7 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
         xmlNodeSetSpacePreserve(text, 1);
         xmlAddChild(text, xmlNewText(BAD_CAST line.c_str()));
         prop(text, "clip-path", ("url(#" + id + ")").c_str());
-        const double end = time_of_output(cells[row].back()) + pop_duration;
+        const double end = typing_times[cells[row].back()] + pop_duration;
         show_at(rising, "display", "none", end);
         show_at(text, "clip-path", "none", end);
     }
