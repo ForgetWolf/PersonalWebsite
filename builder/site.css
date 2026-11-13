@@ -1,7 +1,11 @@
 @font-face{font-family:"VGA Terminal";src:url("fonts/IBM-VGA-8x16.woff") format("woff");font-weight:400;font-style:normal;font-display:block}
-@property --pick{syntax:"<integer>";inherits:true;initial-value:0}
 :root{--pick:0;color-scheme:light dark}
+/* Firefox 160 / iOS 27.2 测试时 random() 固定选第一项（回落到 0），故改用普通变量与命名 random()，整页共享一次抽签，避开注册变量的计算问题。 */
+/*
+@property --pick{syntax:"<integer>";inherits:true;initial-value:0}
 @supports (opacity:random(0,5,1)){:root{--pick:random(0,5,1)}}
+*/
+@supports (opacity:random(--welcome-order,0,5,1)) and (opacity:random(element-scoped --probe,0,1,1)){:root{--pick:random(--welcome-order,0,5,1)}}
 body{margin:0;background:Canvas;color:CanvasText}
 .viewport{position:relative;overflow:hidden;width:100%;height:100vh;height:100svh}
 .wide,.narrow{height:100%}.narrow{display:none}

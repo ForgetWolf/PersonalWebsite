@@ -5,11 +5,14 @@
     font-display: swap;
 }
 
+/* Firefox 160 / iOS 27.2 测试时 random() 固定选第一项（回落到 0），故改用普通变量与命名 random()，让所有偏航链接共享一次抽签，避开注册变量的计算问题。 */
+/*
 @property --cover-random {
     syntax: "<integer>";
     inherits: true;
     initial-value: 0;
 }
+*/
 
 body {
     min-block-size: 100vh;
@@ -149,9 +152,17 @@ body {
     visibility: visible;
 }
 
+/*
 @supports (opacity: random(0, 3, 1)) {
     .coverflow {
         --cover-random: random(0, 3, 1);
+    }
+}
+*/
+
+@supports (opacity: random(--friend-destination, 0, 3, 1)) and (opacity: random(element-scoped --probe, 0, 1, 1)) {
+    .coverflow {
+        --cover-random: random(--friend-destination, 0, 3, 1);
     }
 
     #cover-5:checked ~ .cover-stage .random-link {
