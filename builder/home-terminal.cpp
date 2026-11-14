@@ -190,25 +190,21 @@ static int time_of_sample(size_t sample)
 }
 
 typedef struct {
-    xmlBufferPtr values, times;
+    std::vector<std::pair<double, std::string>> frames;
     int duration;
 } Track;
 
 static Track new_track(const TerminalTrace *trace)
 {
-    return Track{new_buffer(), new_buffer(), duration(trace)};
+    return Track{{}, duration(trace)};
 }
 
 static void keyframe(Track *track, double time, const char *value)
 {
-    char formatted[64];
-    if (xmlBufferLength(track->times)) {
-        buffer_add(track->values, ";");
-        buffer_add(track->times, ";");
-    }
-    snprintf(formatted, sizeof formatted, "%.10f", (double)time / track->duration);
-    buffer_add(track->times, formatted);
-    buffer_add(track->values, value);
+    if (!track->frames.empty() && track->frames.back().first == time)
+        track->frames.back().second = value;
+    else
+        track->frames.emplace_back(time, value);
 }
 
 static void numeric_keyframe(Track *track, double time, double value)
@@ -218,24 +214,27 @@ static void numeric_keyframe(Track *track, double time, double value)
     keyframe(track, time, formatted);
 }
 
-static void end_track(xmlNodePtr node, const char *name, const char *type, Track *track)
+static std::string css_value(const char *name, const std::string &value)
 {
-    xmlNodePtr animation = element(node, type ? "animateTransform" : "animate");
-    char time[64], seconds[72];
-    decimal(time, track->duration / 100.0);
-    snprintf(seconds, sizeof seconds, "%ss", time);
-    prop(animation, "attributeName", name);
-    prop(animation, "values", (const char *)xmlBufferContent(track->values));
-    prop(animation, "keyTimes", (const char *)xmlBufferContent(track->times));
-    prop(animation, "dur", seconds);
-    prop(animation, "begin", "landingEnter.begin");
-    prop(animation, "restart", "never");
-    prop(animation, "fill", "freeze");
-    prop(animation, "calcMode", "discrete");
-    if (type)
-        prop(animation, "type", type);
-    xmlBufferFree(track->values);
-    xmlBufferFree(track->times);
+    if (strcmp(name, "transform") == 0) {
+        const auto space = value.find(' ');
+        return "translate(" + value.substr(0, space) + "px," + value.substr(space + 1) + "px)";
+    }
+    return strcmp(name, "visibility") == 0 ? value : value + "px";
+}
+
+static void end_track(TerminalCss &css, xmlNodePtr node, const char *name,
+                      const Track &track, bool linear = false)
+{
+    std::string frames;
+    for (const auto &[time, value] : track.frames) {
+        char percent[64];
+        decimal(percent, time * 100 / track.duration);
+        frames += std::string(percent) + "%{" + name + ':' + css_value(name, value) + '}';
+    }
+    const std::string base = std::string(name) + ':' + css_value(name, track.frames.back().second) + ';';
+    css.animate(node, base, css.keyframes(frames) + ' ' + std::to_string(track.duration * 10) +
+                "ms " + (linear ? "linear" : "steps(1,end)") + " backwards");
 }
 
 static void outline(xmlNodePtr parent, const TerminalTrace *trace, const char *value,
@@ -284,7 +283,8 @@ static int tape_value(const Snapshot *state, int cell, int kind)
     return kind == 0 || (value >= 33 && value <= 126) ? value : -1;
 }
 
-static void tape_states(xmlNodePtr parent, const TerminalTrace *trace, int cell, int kind)
+static void tape_states(xmlNodePtr parent, const TerminalTrace *trace, int cell, int kind,
+                       TerminalCss &css)
 {
     const size_t count = trace->samples.size();
     size_t values = kind == 2 ? (size_t)trace->last_cell + 1 : 256;
@@ -319,11 +319,11 @@ static void tape_states(xmlNodePtr parent, const TerminalTrace *trace, int cell,
             }
         }
         keyframe(&track, track.duration, visible ? "visible" : "hidden");
-        end_track(group, "visibility", NULL, &track);
+        end_track(css, group, "visibility", track);
     }
 }
 
-static void render_tape(xmlNodePtr tape, const TerminalTrace *trace)
+static void render_tape(xmlNodePtr tape, const TerminalTrace *trace, TerminalCss &css)
 {
     xmlNodePtr pointer = require_id(tape, "bf-pointer-motion");
     xmlUnlinkNode(pointer);
@@ -332,11 +332,11 @@ static void render_tape(xmlNodePtr tape, const TerminalTrace *trace)
         snprintf(id, sizeof id, "bf-cell-%d", cell);
         xmlNodePtr group = element(tape, "g");
         prop(group, "id", id);
-        tape_states(group, trace, cell, 0);
+        tape_states(group, trace, cell, 0, css);
         snprintf(id, sizeof id, "bf-ascii-%d", cell);
         xmlNodePtr ascii = element(group, "g");
         prop(ascii, "id", id);
-        tape_states(ascii, trace, cell, 1);
+        tape_states(ascii, trace, cell, 1, css);
     }
     xmlAddChild(tape, pointer);
     Track track = new_track(trace);
@@ -351,9 +351,9 @@ static void render_tape(xmlNodePtr tape, const TerminalTrace *trace)
         }
     }
     keyframe(&track, track.duration, position);
-    end_track(pointer, "transform", "translate", &track);
+    end_track(css, pointer, "transform", track);
     for (int cell = 0; cell < CELLS; cell++)
-        tape_states(tape, trace, cell, 2);
+        tape_states(tape, trace, cell, 2, css);
 }
 
 typedef struct { size_t row, column; } Position;
@@ -402,61 +402,41 @@ static void translate(xmlNodePtr node, double x, double y)
     prop(node, "transform", value);
 }
 
-static void begin_at(xmlNodePtr animation, double time)
+static std::string delay_at(double time)
 {
-    char offset[64], value[96];
-    decimal(offset, time / 100);
-    snprintf(value, sizeof value, "landingEnter.begin+%ss", offset);
-    prop(animation, "begin", value);
+    char offset[64];
+    decimal(offset, time * 10);
+    return std::string(offset) + "ms";
 }
 
-static void show_at(xmlNodePtr group, const char *attribute, const char *value,
-                    double time, const char *duration = nullptr)
+static void show_at(TerminalCss &css, xmlNodePtr node, double time)
 {
-    xmlNodePtr change = element(group, "set");
-    prop(change, "attributeName", attribute);
-    prop(change, "to", value);
-    begin_at(change, time);
-    if (duration)
-        prop(change, "dur", duration);
-    else
-        prop(change, "fill", "freeze");
+    css.animate(node, "", "terminal-show 1ms steps(1,end) " + delay_at(time - .1) + " backwards");
 }
 
 static void add_rising_glyph(xmlNodePtr row, const std::string &reference,
                              double left, double baseline, int font_size, int units,
-                             double time)
+                             double time, TerminalCss &css)
 {
     xmlNodePtr slot = element(row, "g");
     translate(slot, left, baseline);
     prop(slot, "clip-path", "url(#output-glyph-slot)");
-    prop(slot, "visibility", "hidden");
-    char duration[72], number[64];
-    decimal(number, rise_duration / 100);
-    snprintf(duration, sizeof duration, "%ss", number);
-    show_at(slot, "visibility", "visible", time, duration);
+    css.animate(slot, "visibility:hidden;", "terminal-rising-visible 36ms steps(1,end) " + delay_at(time));
 
     xmlNodePtr moving = element(slot, "g");
     xmlNodePtr glyph = element(moving, "use");
     prop(glyph, "href", reference.c_str());
+    char number[64];
     decimal(number, (double)font_size / units);
     char value[160];
     snprintf(value, sizeof value, "scale(%s -%s)", number, number);
     prop(glyph, "transform", value);
 
-    xmlNodePtr animation = element(moving, "animateTransform");
-    prop(animation, "attributeName", "transform");
-    prop(animation, "type", "translate");
-    snprintf(value, sizeof value, "0 %d;0 %.2f;0 %.2f", font_size,
-             font_size * .40, font_size * .16);
-    prop(animation, "values", value);
-    prop(animation, "keyTimes", "0;0.2933333333;0.64");
-    prop(animation, "calcMode", "discrete");
-    prop(animation, "dur", duration);
-    begin_at(animation, time);
+    css.animate(moving, "", std::string(font_size == 20 ? "terminal-rise-narrow" : "terminal-rise-wide") +
+                " 36ms steps(1,end) " + delay_at(time));
 }
 
-static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobile)
+static double render_output(xmlNodePtr box, const TerminalTrace *trace, bool mobile, TerminalCss &css)
 {
     int font_size = mobile ? 20 : 15, line_height = mobile ? 24 : 18;
     int baseline = mobile ? 28 : 22;
@@ -588,17 +568,14 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
     numeric_keyframe(&y, y.duration, last_y);
     keyframe(&caret_visibility, caret_visibility.duration, "visible");
     feed_frame(feed.duration, 0);
-    end_track(cursor, "x", nullptr, &x);
-    end_track(cursor, "y", nullptr, &y);
-    end_track(cursor, "visibility", nullptr, &caret_visibility);
-    end_track(paper, "transform", "translate", &feed);
-    end_track(background, "y", nullptr, &paper_top);
-    end_track(background, "height", nullptr, &paper_height);
-    prop(xmlLastElementChild(paper), "calcMode", "linear");
-    for (xmlNodePtr animation = xmlFirstElementChild(background); animation;
-         animation = xmlNextElementSibling(animation)) {
-        prop(animation, "calcMode", "linear");
-        xmlAddChild(paper_edge, xmlCopyNode(animation, 1));
+    end_track(css, cursor, "x", x);
+    end_track(css, cursor, "y", y);
+    end_track(css, cursor, "visibility", caret_visibility);
+    css.animate(cursor, "", "terminal-blink 1s steps(1,end) infinite");
+    end_track(css, paper, "transform", feed, true);
+    for (const auto edge : {background, paper_edge}) {
+        end_track(css, edge, "y", paper_top, true);
+        end_track(css, edge, "height", paper_height, true);
     }
 
     for (size_t row = 0; row < rows; ++row) {
@@ -607,10 +584,8 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
             continue;
         xmlNodePtr group = element(paper, "g");
         prop(group, "id", ("bf-output-line-" + std::to_string(row + 1)).c_str());
-        if (row) {
-            prop(group, "display", "none");
-            show_at(group, "display", "inline", row_ready[row]);
-        }
+        if (row)
+            show_at(css, group, row_ready[row]);
         xmlNodePtr rising = element(group, "g");
         prop(rising, "fill", "CanvasText");
         prop(rising, "aria-hidden", "true");
@@ -630,23 +605,23 @@ static double render_output(xmlNodePtr box, const TerminalTrace *trace, int mobi
             const bool pop = !whitespace(byte) && !reference.empty();
             const double x = left + column++ * advance;
             if (pop)
-                add_rising_glyph(rising, reference, x, top, font_size, units, time);
+                add_rising_glyph(rising, reference, x, top, font_size, units, time, css);
             const auto character = utf8(&byte, 1);
             // A letter enters the rendered and selectable text together.
             xmlNodePtr span = element(text, "tspan");
             numeric(span, "x", x);
-            prop(span, "display", "none");
             xmlAddChild(span, xmlNewText(BAD_CAST character.c_str()));
-            show_at(span, "display", "inline", time + (pop ? rise_duration : 0));
+            show_at(css, span, time + (pop ? rise_duration : 0));
         }
         const double end = typing_times[cells[row].back()] + pop_duration;
-        show_at(rising, "display", "none", end);
+        css.animate(rising, "opacity:0;", "terminal-lift-layer 1ms steps(1,end) " + delay_at(end - .1) +
+                    " backwards");
     }
     xmlAddChild(paper, cursor);
     return height * 1.2;
 }
 
-void terminal_render(xmlNodePtr root, const TerminalTrace *trace, int mobile)
+void terminal_render(xmlNodePtr root, const TerminalTrace *trace, bool mobile, TerminalCss &css)
 {
     xmlNodePtr landing = require_id(root, "landing");
     xmlNodePtr stage = require_id(landing, "terminal-stage");
@@ -660,8 +635,8 @@ void terminal_render(xmlNodePtr root, const TerminalTrace *trace, int mobile)
     buffer_add(label, message.c_str());
     prop(box, "aria-label", (const char *)xmlBufferContent(label));
     xmlBufferFree(label);
-    render_tape(tape, trace);
-    double tape_y = render_output(box, trace, mobile) + 45;
+    render_tape(tape, trace, css);
+    double tape_y = render_output(box, trace, mobile, css) + 45;
     numeric(tape, "y", tape_y);
     double height = tape_y + 75.6;
     numeric(stage, "height", height);

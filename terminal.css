@@ -1,0 +1,54 @@
+@font-face {
+  font-family: "VGA Terminal";
+  src: url("fonts/IBM-VGA-8x16.woff") format("woff");
+  font-display: block;
+}
+
+.home { height: 100vh; height: 100svh; overflow: hidden; }
+#main {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+#main h1 { position: relative; z-index: 1; pointer-events: none; user-select: none; }
+
+.terminal { position: absolute; inset: 0; display: block; }
+.terminal--narrow { display: none; }
+.terminal text { user-select: text; -webkit-user-select: text; }
+.terminal [id$="-brainfuck-tape"], .terminal [id$="-output-prefix"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (max-width: 700px) and (orientation: portrait) {
+  .terminal--wide { display: none; }
+  .terminal--narrow { display: block; }
+}
+@media (orientation: landscape) and (max-height: 459px) {
+  .terminal { transform-origin: center; transform: translateY(22px) scale(.8); }
+}
+@media (orientation: landscape) and (max-height: 379px) {
+  .terminal { transform: translateY(20px) scale(.68); }
+}
+@media (orientation: landscape) and (max-height: 329px) {
+  .terminal { transform: translateY(20px) scale(.6); }
+}
+
+@keyframes terminal-show { from { visibility: hidden; } to { visibility: visible; } }
+@keyframes terminal-rising-visible { 0%, 100% { visibility: visible; } }
+@keyframes terminal-lift-layer { from { opacity: 1; } }
+@keyframes terminal-rise-wide {
+  0% { transform: translateY(15px); }
+  29.33333333% { transform: translateY(6px); }
+  64%, 100% { transform: translateY(2.4px); }
+}
+@keyframes terminal-rise-narrow {
+  0% { transform: translateY(20px); }
+  29.33333333% { transform: translateY(8px); }
+  64%, 100% { transform: translateY(3.2px); }
+}
+@keyframes terminal-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal * { animation: none !important; }
+}

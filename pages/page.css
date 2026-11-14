@@ -29,25 +29,15 @@ body {
     color: CanvasText;
 }
 
-.page-title > svg,
-.page-navigation > svg {
+.page-title > svg {
     display: block;
 }
 
-.page-navigation {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    margin-top: -100px;
-    pointer-events: none;
-}
-
-.page-navigation a {
-    pointer-events: auto;
-}
-
-.page-navigation--mobile {
-    display: none;
+.page-title,
+.page-title svg,
+.page-title #page-heading {
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .page-copy {
@@ -126,31 +116,8 @@ body {
         height: calc(59px + max(0px, min(4.16vw, 16.6px) - 7px));
     }
 
-    .page-title #page-heading,
-    .page-navigation--mobile #mobile_info-toggle {
+    .page-title #page-heading {
         transform: translateY(-7px);
-    }
-
-    .page-navigation--mobile #mobile_info-toggle > line {
-        transform-box: view-box;
-        transform-origin: center;
-        transform: scale(1.25);
-    }
-
-    .page-navigation {
-        display: none;
-    }
-
-    .page-navigation--mobile {
-        display: block;
-        position: fixed;
-        inset: 0;
-        margin-top: 0;
-    }
-
-    .page-navigation--mobile #mobile_info-layer > rect {
-        pointer-events: auto;
-        touch-action: none;
     }
 
     .page-copy {

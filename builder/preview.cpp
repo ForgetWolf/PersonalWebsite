@@ -40,13 +40,13 @@ int main(int argc, char** argv) {
     SOCKET listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     sockaddr_in address{};
     address.sin_family = AF_INET;
-    address.sin_addr.s_addr = htonl(INADDR_ANY);
-    address.sin_port = htons(8081);
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    address.sin_port = htons(8087);
     if (bind(listener, reinterpret_cast<sockaddr*>(&address), sizeof(address)) || listen(listener, SOMAXCONN)) {
-        std::cerr << "Cannot listen on 0.0.0.0:8081\n";
+        std::cerr << "Cannot listen on 127.0.0.1:8087\n";
         closesocket(listener); WSACleanup(); return 1;
     }
-    std::cout << "Static preview: http://127.0.0.1:8081/\n";
+    std::cout << "Static preview: http://127.0.0.1:8087/\n";
     for (;;) {
         SOCKET client = accept(listener, nullptr, nullptr);
         if (client == INVALID_SOCKET) break;
@@ -73,6 +73,11 @@ int main(int argc, char** argv) {
                     if (path.extension() == ".html") type = "text/html; charset=utf-8";
                     else if (path.extension() == ".css") type = "text/css";
                     else if (path.extension() == ".woff") type = "font/woff";
+                    else if (path.extension() == ".woff2") type = "font/woff2";
+                    else if (path.extension() == ".ttf") type = "font/ttf";
+                    else if (path.extension() == ".png") type = "image/png";
+                    else if (path.extension() == ".jpg") type = "image/jpeg";
+                    else if (path.extension() == ".ico") type = "image/x-icon";
                     else if (path.extension() == ".svg") type = "image/svg+xml";
                     else type = "application/octet-stream";
                 }

@@ -1,0 +1,98 @@
+:root { color-scheme: light dark; }
+
+body { margin: 0; background: Canvas; color: CanvasText; }
+#main h1 { margin: 0; text-align: center; }
+.wordmark {
+  display: block;
+  width: min(calc(100% - 96px), 480px);
+  height: auto;
+  margin-inline: auto;
+  padding-block-start: 18px;
+  color: CanvasText;
+}
+
+.welcome {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: Canvas;
+  color: CanvasText;
+  user-select: none;
+}
+
+.home-scene { display: block; }
+
+#welcomeKeyboard {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+}
+
+#welcomeHit {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.welcome:has(#welcomeKeyboard:focus-visible) {
+  outline: 2px solid CanvasText;
+  outline-offset: -8px;
+}
+
+.welcome svg { display: block; }
+.welcome > svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.welcome > .portrait { display: none; }
+
+@media (max-width: 700px) and (orientation: portrait) {
+  .welcome > .wide { display: none; }
+  .welcome > .portrait { display: block; }
+}
+
+/* Named samples agree across all animated elements. Older engines use order 0. */
+.welcome { --order: 0; }
+@supports (opacity: random(--welcome-order, 0, 5, 1)) and
+          (opacity: random(element-scoped --probe, 0, 1, 1)) {
+  .welcome { --order: random(--welcome-order, 0, 5, 1); }
+}
+
+.language {
+  opacity: 0;
+  animation: greeting var(--slot-length) linear var(--offset);
+}
+
+.ink {
+  animation: draw var(--duration) linear calc(var(--offset) + var(--start)) backwards;
+}
+
+@keyframes draw {
+  from { stroke-dashoffset: 1; visibility: hidden; }
+  to { stroke-dashoffset: 0; visibility: visible; }
+}
+
+.reveal {
+  animation: reveal 1ms steps(1, end) calc(var(--offset) + var(--start) - 1ms) backwards;
+}
+
+@keyframes reveal { from { visibility: hidden; } }
+
+.mask-width, .mask-height, .mask-rise {
+  transform-box: fill-box;
+  transform-origin: top left;
+  animation-duration: var(--duration);
+  animation-timing-function: linear;
+  animation-delay: calc(var(--offset) + var(--start));
+  animation-fill-mode: backwards;
+}
+.mask-width { animation-name: grow-width; }
+.mask-height { animation-name: grow-height; }
+.mask-rise { animation-name: grow-height; transform-origin: bottom left; }
+@keyframes grow-width { from { transform: scaleX(0); } }
+@keyframes grow-height { from { transform: scaleY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  #welcome-screen { display: none !important; }
+  #landing-screen { display: inline !important; }
+}

@@ -1,13 +1,19 @@
 cmake_minimum_required(VERSION 3.21)
-project(static_packager LANGUAGES C CXX)
+project(RePersonalWebsite LANGUAGES C CXX)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(LibXml2 REQUIRED)
-add_executable(pack-home builder/pack-home.cpp builder/home-welcome.cpp builder/home-terminal.cpp)
-target_compile_features(pack-home PRIVATE cxx_std_17)
-target_link_libraries(pack-home PRIVATE LibXml2::LibXml2)
-if(NOT MSVC)
-    target_link_libraries(pack-home PRIVATE m)
+add_executable(build-welcome builder/build-welcome.cpp builder/home-terminal.cpp)
+target_compile_features(build-welcome PRIVATE cxx_std_17)
+target_link_libraries(build-welcome PRIVATE LibXml2::LibXml2)
+if(MSVC)
+    target_compile_options(build-welcome PRIVATE /utf-8)
+endif()
+
+if(WIN32)
+    add_executable(preview EXCLUDE_FROM_ALL builder/preview.cpp)
+    target_compile_features(preview PRIVATE cxx_std_17)
+    target_link_libraries(preview PRIVATE ws2_32)
 endif()
 
 include(FetchContent)
@@ -30,21 +36,18 @@ add_executable(pack-page builder/pack-page.cpp)
 target_compile_features(pack-page PRIVATE cxx_std_17)
 target_compile_definitions(pack-page PRIVATE CMARK_GFM_STATIC_DEFINE CMARK_GFM_EXTENSIONS_STATIC_DEFINE)
 target_include_directories(pack-page PRIVATE
-    "${cmark_gfm_SOURCE_DIR}/src" "${cmark_gfm_BINARY_DIR}/src"
-    "${cmark_gfm_SOURCE_DIR}/extensions" "${cmark_gfm_BINARY_DIR}/extensions"
-)
-target_link_libraries(pack-page PRIVATE
-    libcmark-gfm-extensions_static libcmark-gfm_static LibXml2::LibXml2)
+    "${cmark_gfm_SOURCE_DIR}/src" "${cmark_gfm_BINARY_DIR}/src" "${cmark_gfm_SOURCE_DIR}/extensions")
+target_link_libraries(pack-page PRIVATE libcmark-gfm-extensions_static libcmark-gfm_static LibXml2::LibXml2)
 
-add_custom_target(package
+add_custom_target(site ALL
     COMMAND "${CMAKE_COMMAND}"
         "-DSITE_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}"
         "-DDIST=${CMAKE_CURRENT_SOURCE_DIR}/dist"
-        "-DHOME_STAGE=${CMAKE_CURRENT_BINARY_DIR}/index.html.tmp"
-        "-DPACK_HOME=$<TARGET_FILE:pack-home>"
+        "-DBUILD_HOME=$<TARGET_FILE:build-welcome>"
         "-DPACK_PAGE=$<TARGET_FILE:pack-page>"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/builder/package.cmake"
-    DEPENDS pack-home pack-page
+    DEPENDS build-welcome pack-page
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     VERBATIM
 )
 

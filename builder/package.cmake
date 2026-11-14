@@ -1,6 +1,7 @@
 file(MAKE_DIRECTORY "${DIST}/fonts")
 file(COPY "${SITE_SOURCE}/favicon.ico" "${SITE_SOURCE}/pages/page.css"
-    "${SITE_SOURCE}/pages/coverflow.css" "${CMAKE_CURRENT_LIST_DIR}/site.css" DESTINATION "${DIST}")
+    "${SITE_SOURCE}/pages/coverflow.css" "${SITE_SOURCE}/menu.css"
+    "${SITE_SOURCE}/welcome.css" "${SITE_SOURCE}/terminal.css" DESTINATION "${DIST}")
 file(COPY "${SITE_SOURCE}/pages/favicon" DESTINATION "${DIST}"
     FILES_MATCHING PATTERN "*.png" PATTERN "*.svg" PATTERN "*.jpg"
     PATTERN "forgetwolf.png" EXCLUDE)
@@ -40,8 +41,7 @@ foreach(page IN ITEMS about friends contact)
 endforeach()
 
 execute_process(
-    COMMAND "${PACK_HOME}" "${HOME_STAGE}"
+    COMMAND "${BUILD_HOME}"
     WORKING_DIRECTORY "${SITE_SOURCE}"
     COMMAND_ERROR_IS_FATAL ANY
 )
-file(RENAME "${HOME_STAGE}" "${DIST}/index.html")

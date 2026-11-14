@@ -1,0 +1,109 @@
+.site-menu {
+  --menu-time: 687.5ms;
+  --menu-easing: cubic-bezier(.22, .75, .25, 1);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 100px;
+  margin-top: -100px;
+  pointer-events: none;
+  user-select: none;
+}
+.home .site-menu { position: absolute; inset: 0; height: auto; margin: 0; }
+.site-menu--mobile { display: none; }
+.menu-drawing { display: block; }
+.menu-state {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.menu-hit {
+  position: absolute;
+  z-index: 1;
+  top: 2%;
+  right: 0;
+  width: 10%;
+  min-width: 44px;
+  height: 56px;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.menu-state:focus-visible ~ .menu-hit { outline: 2px solid CanvasText; outline-offset: -4px; }
+.menu-layer, .menu-close-icon {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--menu-time) var(--menu-easing), visibility var(--menu-time) step-end;
+}
+.menu-state:checked ~ svg .menu-layer,
+.menu-state:checked ~ svg .menu-close-icon {
+  opacity: 1;
+  visibility: visible;
+  transition-timing-function: var(--menu-easing), step-start;
+}
+.menu-links { transition: transform var(--menu-time) var(--menu-easing); }
+.menu-state:checked ~ svg .menu-links { transform: translate(0, 0); }
+.menu-state:checked ~ svg .menu-layer a { pointer-events: auto; }
+.menu-layer a:focus-visible { outline-offset: -2px; }
+
+.menu-bar-top { --from: -8px; --overshoot: 48deg; --recoil: 44deg; --end: 45deg; }
+.menu-bar-bottom { --from: 8px; --overshoot: -48deg; --recoil: -44deg; --end: -45deg; }
+.menu-bar-top, .menu-bar-bottom {
+  --reverse-overshoot: calc(var(--end) - var(--overshoot));
+  --reverse-recoil: calc(var(--end) - var(--recoil));
+  transform: translateY(var(--from));
+}
+.menu-state:checked ~ svg :is(.menu-bar-top, .menu-bar-bottom) {
+  transform: rotate(var(--end));
+  animation: menu-spring-open var(--menu-time);
+}
+.menu-state:not(:checked) ~ svg :is(.menu-bar-top, .menu-bar-bottom) {
+  animation: menu-spring-close var(--menu-time);
+}
+.menu-bar-middle { transition: transform var(--menu-time) var(--menu-easing), opacity var(--menu-time) var(--menu-easing); }
+.menu-state:checked ~ svg .menu-bar-middle { transform: scaleX(0); opacity: 0; }
+
+@keyframes menu-spring-open {
+  0% { transform: translateY(var(--from)) rotate(0deg); animation-timing-function: cubic-bezier(.22, .75, .25, 1); }
+  68% { transform: rotate(var(--overshoot)); animation-timing-function: cubic-bezier(.35, 0, .65, 1); }
+  86% { transform: rotate(var(--recoil)); animation-timing-function: cubic-bezier(.35, 0, .65, 1); }
+  100% { transform: rotate(var(--end)); }
+}
+@keyframes menu-spring-close {
+  0% { transform: rotate(var(--end)); animation-timing-function: cubic-bezier(.22, .75, .25, 1); }
+  68% { transform: translateY(var(--from)) rotate(var(--reverse-overshoot)); animation-timing-function: cubic-bezier(.35, 0, .65, 1); }
+  86% { transform: translateY(var(--from)) rotate(var(--reverse-recoil)); animation-timing-function: cubic-bezier(.35, 0, .65, 1); }
+  100% { transform: translateY(var(--from)); }
+}
+
+/* Avoid a closing animation on first paint, before the checkbox receives focus. */
+.site-menu:not(:focus-within) .menu-state:not(:checked) ~ svg :is(.menu-bar-top, .menu-bar-bottom) {
+  animation: none;
+}
+
+@media (max-width: 700px), (pointer: coarse) {
+  .site-menu--desktop { display: none; }
+  .site-menu--mobile { display: block; position: fixed; inset: 0; height: auto; margin: 0; }
+  .site-menu--mobile .menu-icon { transform: translateY(-7px); }
+  .site-menu--mobile .menu-icon > line { transform: scale(1.25); }
+  .site-menu--mobile .menu-hit { transform: translateY(-7px); }
+  .site-menu--mobile .menu-hit-close {
+    top: calc(75% + 18px);
+    left: 50%;
+    transform: translateX(-50%);
+    visibility: hidden;
+  }
+  .site-menu--mobile .menu-state:checked ~ .menu-hit:not(.menu-hit-close),
+  .site-menu--mobile .menu-state:checked ~ svg .menu-icon { visibility: hidden; }
+  .site-menu--mobile .menu-state:checked ~ .menu-hit-close { visibility: visible; }
+  .site-menu--mobile .menu-state:checked ~ svg .menu-layer > rect { pointer-events: auto; touch-action: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-menu *, .site-menu :is(.menu-bar-top, .menu-bar-bottom) {
+    animation: none !important;
+    transition: none !important;
+  }
+}

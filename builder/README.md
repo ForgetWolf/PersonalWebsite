@@ -1,23 +1,22 @@
 # C++ 静态站点构建
 
-构建从 Markdown 和动画源数据直接生成静态网站，无需 Python。C++ 用 `greeting.hpp`、`russian.hpp` 和 `chinese.hpp` 生成桌面和移动端的六种欢迎顺序。移动端沿用各行现有的笔画分组，构建时根据路径计算英俄文的行位置。
+日常构建需要 C++17、C 编译器、libxml2 开发库、CMake 3.21 或更新版本和 Ninja。CMake 默认获取固定版本的 cmark-gfm 并核对 SHA-256。已有相同归档时，可在配置时使用 `-DCMARK_ARCHIVE=<归档路径>`。
 
-首页构建会离线执行 `random/message.bf`，核对 `source/main.md`，再把纸带、指针和文字的变化写成 SVG 动画。输出继续使用可复制的 SVG 文字。终端的几何、菜单和标题从 `templates/home-*.svg` 读取，纸带数字和字符使用 `templates/din-glyphs.xml` 中从现有 DIN 字体提取的字形。
-
-C++17 使用 libxml2 组装首页，使用 cmark-gfm 渲染子页正文。子页标题和导航沿用 `templates/` 里的 SVG，CMake 负责复制 CSS、字体和 favicon。cmark-gfm 支持表格、删除线和脚注。默认安全渲染会省略 Markdown 中的原始 HTML。
-
-从 PersonalWebsite 根目录运行。需要 C++17 工具链、用于编译 cmark-gfm 的 C 编译器、libxml2 开发库、CMake 3.21 或以上，以及 Ninja。GitHub Pages 使用同一打包目标。
+从仓库根目录执行，生成的站点在 `dist/`。GitHub Pages 使用同一个 `site` 目标。
 
 ```powershell
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target package
+cmake --build build --target site
 ```
 
-首次配置时 CMake 会从 GitHub 获取固定版本的 cmark-gfm 并校验 SHA-256。也可以通过 `-DCMARK_ARCHIVE=<归档路径>` 使用已下载的同一份归档。Windows 上请用正斜杠填写该路径。
+欢迎页沿用原始 SVG 字形和时序，构建时生成 CSS。欢迎结束或手动跳过由两条 SVG SMIL 指令衔接。首页终端在构建时执行 `random/message.bf`，核对 `source/main.md`，再生成逐字、纸带和光标的 CSS 动画。子页 Markdown 由 cmark-gfm 渲染。FontForge 只用于重制 GOST 字体。
 
-输出在仓库根目录的 `dist/`。Windows 上可从仓库根目录运行编译好的 `server.exe` 预览。
+Windows 本地预览从仓库根目录执行以下命令，地址为 http://127.0.0.1:8087/ 。
 
-可用相同输入生成原 Python 版作对照，核对 SVG 节点、动画属性和输出文字。比较 SVG 坐标时允许等价的数字写法，例如 `101` 和 `101.0`。从干净目录构建时只需源文件和静态素材，无需预先生成首页 SVG 或子页 HTML。
+```powershell
+cmake --build build --target preview
+.\build\preview.exe
+```
 
 ## 重制 GOST 字体
 
